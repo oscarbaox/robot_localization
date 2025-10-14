@@ -51,6 +51,10 @@ class Particle(object):
         )
 
     # TODO: define additional helper functions if needed
+    @staticmethod
+    def wrap_angle_to_pi(angle):
+        """Wraps an angle (in radians) to the interval [-pi, pi]."""
+        return math.remainder(angle, 2 * math.pi)
 
 
 class ParticleFilter(Node):
@@ -244,6 +248,12 @@ class ParticleFilter(Node):
             return
 
         # TODO: modify particles using delta
+        for i, particle in enumerate(self.particle_cloud):
+            self.particle_cloud[i].x = self.particle_cloud[i].x + delta[0]
+            self.particle_cloud[i].y = self.particle_cloud[i].y + delta[1]
+            self.particle_cloud[i].theta = Particle.wrap_angle_to_pi(
+                self.particle_cloud[i].theta + delta[2]
+            )
 
     def resample_particles(self):
         """Resample the particles according to the new particle weights.
