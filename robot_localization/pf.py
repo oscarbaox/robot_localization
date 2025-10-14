@@ -16,7 +16,7 @@ import math
 import time
 import numpy as np
 from occupancy_field import OccupancyField
-from helper_functions import TFHelper
+from helper_functions import TFHelper, draw_random_sample
 from rclpy.qos import qos_profile_sensor_data
 from angle_helpers import quaternion_from_euler
 
@@ -55,6 +55,20 @@ class Particle(object):
     def wrap_angle_to_pi(angle):
         """Wraps an angle (in radians) to the interval [-pi, pi]."""
         return math.remainder(angle, 2 * math.pi)
+
+    @staticmethod
+    def weighted_std_sample(values_x, values_y, weights):
+        """
+        Calculates the sample weighted standard deviation.
+        The weights are assumed to be reliability weights.
+        """
+        weighted_mean_x = np.average(values_x, weights=weights)
+        weighted_variance_x = np.sum(weights * (values_x - weighted_mean_x) ** 2)
+
+        weighted_mean_y = np.average(values_y, weights=weights)
+        weighted_variance_y = np.sum(weights * (values_y - weighted_mean_y) ** 2)
+
+        return (np.sqrt(weighted_variance_x), np.sqrt(weighted_variance_y))
 
 
 class ParticleFilter(Node):
@@ -247,7 +261,7 @@ class ParticleFilter(Node):
             self.current_odom_xy_theta = new_odom_xy_theta
             return
 
-        # TODO: modify particles using delta
+        # TODO (done): modify particles using delta
         for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = self.particle_cloud[i].x + delta[0]
             self.particle_cloud[i].y = self.particle_cloud[i].y + delta[1]
@@ -264,6 +278,37 @@ class ParticleFilter(Node):
         # make sure the distribution is normalized
         self.normalize_particles()
         # TODO: fill out the rest of the implementation
+
+        # discrete resampling
+        x_list = []
+        y_list = []
+        weight_list = []
+        for _, particle in enumerate(self.particle_cloud):
+            x_list.append(particle.x)
+            y_list.append(particle.y)
+            weight_list.append(particle.w)
+
+        self.particle_cloud = draw_random_sample(
+            self.particle_cloud, weight_list, self.n_particles
+        )
+        self.get_logger().info(
+            f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
+        )
+
+        # add noise based std_dev and normal distribution
+        x_std, y_std = Particle.weighted_std_sample(x_list, y_list, weight_list)
+        x_noise_sample = np.random.normal(
+            loc=0, scale=x_std / 4, size=len(self.particle_cloud)
+        )
+        y_noise_sample = np.random.normal(
+            loc=0, scale=y_std / 4, size=len(self.particle_cloud)
+        )
+        for i, particle in enumerate(self.particle_cloud):
+            self.particle_cloud[i].x = self.particle_cloud[i].x + x_noise_sample[i]
+            self.particle_cloud[i].y = self.particle_cloud[i].y + y_noise_sample[i]
+        self.get_logger().info(
+            f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
+        )
 
     def update_particles_with_laser(self, r, theta):
         """Updates the particle weights in response to the scan data
@@ -291,7 +336,7 @@ class ParticleFilter(Node):
                 self.odom_pose
             )
         self.particle_cloud = []
-        # TODO: implement this
+        # TODO (done): implement this
 
         # Get map data from occupancy_field object and calculate min/max x, y
         bbox = self.occupancy_field.get_obstacle_bounding_box()
@@ -320,7 +365,7 @@ class ParticleFilter(Node):
         sum to 1
 
         """
-        # TODO: implement this
+        # TODO (done): implement this
         weight_sum = 0
         for particle in self.particle_cloud:
             weight_sum = weight_sum + particle.w
