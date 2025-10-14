@@ -324,7 +324,7 @@ class ParticleFilter(Node):
 
         self.get_logger().info(f"Weight_sum: {weight_sum}")
 
-        for i in range(0, len(self.particle_cloud)):
+        for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].w = self.particle_cloud[i].w / weight_sum
 
     def publish_particles(self, timestamp):
