@@ -284,21 +284,14 @@ class ParticleFilter(Node):
         # TODO: implement this
 
         # Get map data from occupancy_field object and calculate min/max x, y
-        origin_x = self.occupancy_field.map.info.origin.position.x
-        origin_y = self.occupancy_field.map.info.origin.position.y
-        width = self.occupancy_field.map.info.width
-        height = self.occupancy_field.map.info.height
-        resolution = self.occupancy_field.map.info.resolution
+        bbox = self.occupancy_field.get_obstacle_bounding_box()
 
-        min_x = origin_x
-        min_y = origin_y
-        max_x = origin_x + width * resolution
-        max_y = origin_y + height * resolution
+        self.get_logger().info(f"bbox: {bbox}")
 
         for _ in range(self.n_particles):
             particle = Particle(
-                x=np.random.uniform(low=min_x, high=max_x),
-                y=np.random.uniform(low=min_y, high=max_y),
+                x=np.random.uniform(low=bbox[0][0], high=bbox[0][1]),
+                y=np.random.uniform(low=bbox[1][0], high=bbox[1][1]),
                 theta=np.random.uniform(low=-np.pi, high=np.pi),
                 w=1 / self.n_particles,
             )
