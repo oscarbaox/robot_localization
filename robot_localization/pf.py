@@ -21,6 +21,18 @@ from rclpy.qos import qos_profile_sensor_data
 from angle_helpers import quaternion_from_euler
 
 
+class bcolors:
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
+
 class Particle(object):
     """Represents a hypothesis (particle) of the robot's pose consisting of x,y and theta (yaw)
     Attributes:
@@ -82,7 +94,7 @@ class ParticleFilter(Node):
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
-        self.n_particles = 5  # the number of particles to use
+        self.n_particles = 300  # the number of particles to use
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
         self.a_thresh = (
@@ -260,8 +272,55 @@ class ParticleFilter(Node):
         r: the distance readings to obstacles
         theta: the angle relative to the robot frame for each corresponding reading
         """
-        # TODO: implement this
-        pass
+        # print(f"{bcolors.FAIL}Lenght of r:{len(r)}{bcolors.ENDC}")
+        # print(
+        #     f"{bcolors.FAIL}Theta: {theta[0]}, {theta[1]}, {theta[719]}{bcolors.ENDC}"
+        # )
+        print("Before: ", end="")
+        for i in range(10):
+            print(f"{bcolors.FAIL}{self.particle_cloud[i].w}, {bcolors.ENDC}", end="")
+        print()
+
+        for particle in self.particle_cloud:
+
+            likelihood = 0.0  # or 0.0 if using log-likelihood
+
+            for i in range(len(r)):
+                # Skip invalid readings
+                if np.isnan(r[i]) or np.isinf(r[i]):
+                    continue
+
+                # Transform laser scan point to map frame using particle's pose
+                scan_x_map = particle.x + r[i] * np.cos(particle.theta + theta[i])
+                scan_y_map = particle.y + r[i] * np.sin(particle.theta + theta[i])
+
+                # Get distance to closest obstacle at this point
+                dist_to_obstacle = self.occupancy_field.get_closest_obstacle_distance(
+                    scan_x_map, scan_y_map
+                )
+
+                # Update likelihood based on how close the scan point is to an obstacle
+                # Gaussian model
+                likelihood += dist_to_obstacle
+
+            # Update particle weight based on likelihood
+            if np.isnan(likelihood):
+                particle.w = 0
+            else:
+                particle.w *= 1 / likelihood
+            # print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
+
+        # Normalize after updating all particles
+        self.normalize_particles()
+        weights = []
+        coords = []
+        for particle in self.particle_cloud:
+            weights.append(particle.w)
+            coords.append((particle.x, particle.y))
+        weights.sort(reverse=True)
+        print(
+            f"{bcolors.FAIL}Particle weights:{', '.join(map(str, weights[:9]))}{bcolors.ENDC}"
+        )
 
     def update_initial_pose(self, msg):
         """Callback function to handle re-initializing the particle filter based on a pose estimate.
@@ -281,7 +340,6 @@ class ParticleFilter(Node):
                 self.odom_pose
             )
         self.particle_cloud = []
-        # TODO: implement this
 
         # Get map data from occupancy_field object and calculate min/max x, y
         origin_x = self.occupancy_field.map.info.origin.position.x
@@ -317,7 +375,6 @@ class ParticleFilter(Node):
         sum to 1
 
         """
-        # TODO: implement this
         weight_sum = 0
         for particle in self.particle_cloud:
             weight_sum = weight_sum + particle.w
