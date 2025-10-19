@@ -113,7 +113,7 @@ class ParticleFilter(Node):
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
-        self.n_particles = 300  # the number of particles to use
+        self.n_particles = 50  # the number of particles to use
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
         self.a_thresh = (
@@ -300,7 +300,7 @@ class ParticleFilter(Node):
                 + delta[0] * sin(particle.theta)
                 + delta[1] * cos(particle.theta)
             )
-            self.particle_cloud[i].theta = Particle.wrap_angle_to_pi(
+            self.particle_cloud[i].theta = TFHelper.angle_normalize(
                 self.particle_cloud[i].theta + delta[2]
             )
 
