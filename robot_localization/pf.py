@@ -113,7 +113,7 @@ class ParticleFilter(Node):
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
-        self.n_particles = 50  # the number of particles to use
+        self.n_particles = 300  # the number of particles to use
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
         self.a_thresh = (
@@ -320,7 +320,7 @@ class ParticleFilter(Node):
         )
 
         # add noise based std_dev and normal distribution
-        """ x_std, y_std = Particle.weighted_std_sample(
+        x_std, y_std = Particle.weighted_std_sample(
             self.x_list, self.y_list, self.weight_list
         )
         x_noise_sample = np.random.normal(
@@ -334,7 +334,7 @@ class ParticleFilter(Node):
             self.particle_cloud[i].y = self.particle_cloud[i].y + y_noise_sample[i]
         self.get_logger().info(
             f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
-        ) """
+        )
 
     def update_particles_with_laser(self, r, theta):
         """Updates the particle weights in response to the scan data
@@ -352,7 +352,7 @@ class ParticleFilter(Node):
 
         for particle in self.particle_cloud:
 
-            likelihood = 0.0  # or 0.0 if using log-likelihood
+            likelihood = 0.0
 
             for i in range(len(r)):
                 # Skip invalid readings
@@ -369,15 +369,14 @@ class ParticleFilter(Node):
                 )
 
                 # Update likelihood based on how close the scan point is to an obstacle
-                # Gaussian model
-                likelihood += dist_to_obstacle
+                if np.isnan(dist_to_obstacle):
+                    likelihood += 20
+                else:
+                    likelihood += dist_to_obstacle
 
             # Update particle weight based on likelihood
-            if np.isnan(likelihood):
-                particle.w = 0.000001
-            else:
-                particle.w *= 100 / likelihood
-            # print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
+            particle.w *= 1 / likelihood
+            print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
 
         # Normalize after updating all particles
         self.normalize_particles()
