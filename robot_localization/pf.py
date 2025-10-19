@@ -292,13 +292,13 @@ class ParticleFilter(Node):
         for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = (
                 self.particle_cloud[i].x
-                + delta[0] * cos(particle.theta)
-                - delta[1] * sin(particle.theta)
+                + delta[0] * sin(particle.theta)
+                + delta[1] * cos(particle.theta)
             )
             self.particle_cloud[i].y = (
                 self.particle_cloud[i].y
-                + delta[0] * sin(particle.theta)
-                + delta[1] * cos(particle.theta)
+                + delta[0] * cos(particle.theta)
+                - delta[1] * sin(particle.theta)
             )
             self.particle_cloud[i].theta = self.transform_helper.angle_normalize(
                 self.particle_cloud[i].theta + delta[2]
@@ -310,6 +310,13 @@ class ParticleFilter(Node):
         particle is selected in the resampling step.  You may want to make use of the given helper
         function draw_random_sample in helper_functions.py.
         """
+        self.x_list = []
+        self.y_list = []
+        self.weight_list = []
+        for i, particle in enumerate(self.particle_cloud):
+            self.x_list.append(particle.x)
+            self.y_list.append(particle.y)
+            self.weight_list.append(particle.w)
         # make sure the distribution is normalized
         self.normalize_particles()
         # TODO: fill out the rest of the implementation
@@ -324,14 +331,20 @@ class ParticleFilter(Node):
             self.x_list, self.y_list, self.weight_list
         )
         x_noise_sample = np.random.normal(
-            loc=0, scale=x_std / 4, size=len(self.particle_cloud)
+            loc=0, scale=x_std / 10, size=len(self.particle_cloud)
         )
         y_noise_sample = np.random.normal(
-            loc=0, scale=y_std / 4, size=len(self.particle_cloud)
+            loc=0, scale=y_std / 10, size=len(self.particle_cloud)
+        )
+        theta_noise_sample = np.random.uniform(
+            low=0, high=np.pi / 2, size=len(self.particle_cloud)
         )
         for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = self.particle_cloud[i].x + x_noise_sample[i]
             self.particle_cloud[i].y = self.particle_cloud[i].y + y_noise_sample[i]
+            self.particle_cloud[i].theta = self.transform_helper.angle_normalize(
+                self.particle_cloud[i].theta + theta_noise_sample[i]
+            )
         self.get_logger().info(
             f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
         )
