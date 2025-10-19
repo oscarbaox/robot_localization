@@ -152,6 +152,8 @@ class ParticleFilter(Node):
         thread.start()
         self.transform_update_timer = self.create_timer(0.05, self.pub_latest_transform)
 
+        self.robot_pose = Pose()
+
     def pub_latest_transform(self):
         """This function takes care of sending out the map to odom transform"""
         if self.last_scan_timestamp is None:
@@ -240,7 +242,16 @@ class ParticleFilter(Node):
 
         # TODO: assign the latest pose into self.robot_pose as a geometry_msgs.Pose object
         # just to get started we will fix the robot's pose to always be at the origin
-        self.robot_pose = Pose()
+        theta, x, y = 0, 0, 0
+        for particle in self.particle_cloud:
+            theta += particle.theta * particle.w
+            x += particle.x * particle.w
+            y += particle.y * particle.w
+
+        q = quaternion_from_euler(0, 0, theta)
+        self.robot_pose = self.transform_helper.convert_translation_rotation_to_pose(
+            [x, y, 0], q
+        )
         if hasattr(self, "odom_pose"):
             self.transform_helper.fix_map_to_odom_transform(
                 self.robot_pose, self.odom_pose
@@ -274,7 +285,7 @@ class ParticleFilter(Node):
             return
 
         # TODO (done): modify particles using delta
-        for i, particle in enumerate(self.particle_cloud):
+        for i, _ in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = self.particle_cloud[i].x + delta[0]
             self.particle_cloud[i].y = self.particle_cloud[i].y + delta[1]
             self.particle_cloud[i].theta = Particle.wrap_angle_to_pi(
