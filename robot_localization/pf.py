@@ -156,6 +156,8 @@ class ParticleFilter(Node):
         thread.start()
         self.transform_update_timer = self.create_timer(0.05, self.pub_latest_transform)
 
+        self.robot_pose = Pose()
+
     def pub_latest_transform(self):
         """This function takes care of sending out the map to odom transform"""
         if self.last_scan_timestamp is None:
@@ -243,21 +245,17 @@ class ParticleFilter(Node):
         self.normalize_particles()
 
         # TODO: assign the latest pose into self.robot_pose as a geometry_msgs.Pose object
-        # extract particle cloud into lists
-        self.x_list = []
-        self.y_list = []
-        self.weight_list = []
-        for _, particle in enumerate(self.particle_cloud):
-            self.x_list.append(particle.x)
-            self.y_list.append(particle.y)
-            self.weight_list.append(particle.w)
+        # just to get started we will fix the robot's pose to always be at the origin
+        theta, x, y = 0, 0, 0
+        for particle in self.particle_cloud:
+            theta += particle.theta * particle.w
+            x += particle.x * particle.w
+            y += particle.y * particle.w
 
-        # construct 2D histogram with
-
-        self.robot_pose = Pose()
-        self.robot_pose.position.x = 0.0
-        self.robot_pose.position.y = 0.0
-        self.robot_pose.position.z = 0.0
+        q = quaternion_from_euler(0, 0, theta)
+        self.robot_pose = self.transform_helper.convert_translation_rotation_to_pose(
+            [x, y, 0], q
+        )
         if hasattr(self, "odom_pose"):
             self.transform_helper.fix_map_to_odom_transform(
                 self.robot_pose, self.odom_pose
