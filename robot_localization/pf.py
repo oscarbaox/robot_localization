@@ -255,8 +255,8 @@ class ParticleFilter(Node):
         # construct 2D histogram with
 
         self.robot_pose = Pose()
-        self.robot_pose.position.x = 6.0
-        self.robot_pose.position.y = -20.0
+        self.robot_pose.position.x = 0.0
+        self.robot_pose.position.y = 0.0
         self.robot_pose.position.z = 0.0
         if hasattr(self, "odom_pose"):
             self.transform_helper.fix_map_to_odom_transform(
@@ -319,9 +319,6 @@ class ParticleFilter(Node):
         # discrete resampling
         self.particle_cloud = draw_random_sample(
             self.particle_cloud, self.weight_list, self.n_particles
-        )
-        self.get_logger().info(
-            f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
         )
 
         # add noise based std_dev and normal distribution
