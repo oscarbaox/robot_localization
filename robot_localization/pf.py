@@ -254,7 +254,7 @@ class ParticleFilter(Node):
 
         q = quaternion_from_euler(0, 0, theta)
         self.robot_pose = self.transform_helper.convert_translation_rotation_to_pose(
-            [x, y, 0], q
+            [x, y, 0.0], q
         )
         if hasattr(self, "odom_pose"):
             self.transform_helper.fix_map_to_odom_transform(
