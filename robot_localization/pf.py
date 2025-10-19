@@ -13,6 +13,7 @@ from nav2_msgs.msg import Particle as Nav2Particle
 from geometry_msgs.msg import PoseWithCovarianceStamped, Pose, Point, Quaternion
 from rclpy.duration import Duration
 import math
+from math import sin, cos
 import time
 import numpy as np
 from occupancy_field import OccupancyField
@@ -100,7 +101,7 @@ class ParticleFilter(Node):
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
-        self.n_particles = 5  # the number of particles to use
+        self.n_particles = 300  # the number of particles to use
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
         self.a_thresh = (
@@ -108,6 +109,9 @@ class ParticleFilter(Node):
         )  # the amount of angular movement before performing an update
 
         # TODO: define additional constants if needed
+        self.x_list = []
+        self.y_list = []
+        self.weight_list = []
 
         # pose_listener responds to selection of a new approximate robot location (for instance using rviz)
         self.create_subscription(
@@ -227,8 +231,21 @@ class ParticleFilter(Node):
         self.normalize_particles()
 
         # TODO: assign the latest pose into self.robot_pose as a geometry_msgs.Pose object
-        # just to get started we will fix the robot's pose to always be at the origin
+        # extract particle cloud into lists
+        self.x_list = []
+        self.y_list = []
+        self.weight_list = []
+        for _, particle in enumerate(self.particle_cloud):
+            self.x_list.append(particle.x)
+            self.y_list.append(particle.y)
+            self.weight_list.append(particle.w)
+
+        # construct 2D histogram with
+
         self.robot_pose = Pose()
+        self.robot_pose.position.x = 6.0
+        self.robot_pose.position.y = -20.0
+        self.robot_pose.position.z = 0.0
         if hasattr(self, "odom_pose"):
             self.transform_helper.fix_map_to_odom_transform(
                 self.robot_pose, self.odom_pose
@@ -263,8 +280,16 @@ class ParticleFilter(Node):
 
         # TODO (done): modify particles using delta
         for i, particle in enumerate(self.particle_cloud):
-            self.particle_cloud[i].x = self.particle_cloud[i].x + delta[0]
-            self.particle_cloud[i].y = self.particle_cloud[i].y + delta[1]
+            self.particle_cloud[i].x = (
+                self.particle_cloud[i].x
+                + delta[0] * cos(particle.theta)
+                - delta[1] * sin(particle.theta)
+            )
+            self.particle_cloud[i].y = (
+                self.particle_cloud[i].y
+                + delta[0] * sin(particle.theta)
+                + delta[1] * cos(particle.theta)
+            )
             self.particle_cloud[i].theta = Particle.wrap_angle_to_pi(
                 self.particle_cloud[i].theta + delta[2]
             )
@@ -280,23 +305,17 @@ class ParticleFilter(Node):
         # TODO: fill out the rest of the implementation
 
         # discrete resampling
-        x_list = []
-        y_list = []
-        weight_list = []
-        for _, particle in enumerate(self.particle_cloud):
-            x_list.append(particle.x)
-            y_list.append(particle.y)
-            weight_list.append(particle.w)
-
         self.particle_cloud = draw_random_sample(
-            self.particle_cloud, weight_list, self.n_particles
+            self.particle_cloud, self.weight_list, self.n_particles
         )
         self.get_logger().info(
             f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
         )
 
         # add noise based std_dev and normal distribution
-        x_std, y_std = Particle.weighted_std_sample(x_list, y_list, weight_list)
+        """ x_std, y_std = Particle.weighted_std_sample(
+            self.x_list, self.y_list, self.weight_list
+        )
         x_noise_sample = np.random.normal(
             loc=0, scale=x_std / 4, size=len(self.particle_cloud)
         )
@@ -308,7 +327,7 @@ class ParticleFilter(Node):
             self.particle_cloud[i].y = self.particle_cloud[i].y + y_noise_sample[i]
         self.get_logger().info(
             f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
-        )
+        ) """
 
     def update_particles_with_laser(self, r, theta):
         """Updates the particle weights in response to the scan data
