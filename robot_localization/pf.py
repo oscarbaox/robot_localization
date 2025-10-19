@@ -360,9 +360,9 @@ class ParticleFilter(Node):
 
             # Update particle weight based on likelihood
             if np.isnan(likelihood):
-                particle.w = 0
+                particle.w = 0.000001
             else:
-                particle.w *= 1 / likelihood
+                particle.w *= 100 / likelihood
             # print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
 
         # Normalize after updating all particles
