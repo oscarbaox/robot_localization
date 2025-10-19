@@ -300,7 +300,7 @@ class ParticleFilter(Node):
                 + delta[0] * sin(particle.theta)
                 + delta[1] * cos(particle.theta)
             )
-            self.particle_cloud[i].theta = TFHelper.angle_normalize(
+            self.particle_cloud[i].theta = self.transform_helper.angle_normalize(
                 self.particle_cloud[i].theta + delta[2]
             )
 
