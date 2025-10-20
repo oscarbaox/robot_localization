@@ -367,7 +367,7 @@ class ParticleFilter(Node):
 
         for particle in self.particle_cloud:
 
-            likelihood = 0.0  # or 0.0 if using log-likelihood
+            likelihood = 0.0
 
             for i in range(len(r)):
                 # Skip invalid readings
@@ -384,15 +384,14 @@ class ParticleFilter(Node):
                 )
 
                 # Update likelihood based on how close the scan point is to an obstacle
-                # Gaussian model
-                likelihood += dist_to_obstacle
+                if np.isnan(dist_to_obstacle):
+                    likelihood += 20
+                else:
+                    likelihood += dist_to_obstacle
 
             # Update particle weight based on likelihood
-            if np.isnan(likelihood):
-                particle.w = 0.000001
-            else:
-                particle.w *= 100 / likelihood
-            # print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
+            particle.w *= 1 / likelihood
+            print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
 
         # Normalize after updating all particles
         self.normalize_particles()
