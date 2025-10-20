@@ -292,13 +292,13 @@ class ParticleFilter(Node):
         for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = (
                 self.particle_cloud[i].x
-                + delta[0] * sin(particle.theta)
-                + delta[1] * cos(particle.theta)
+                + delta[0] * cos(particle.theta)
+                - delta[1] * sin(particle.theta)
             )
             self.particle_cloud[i].y = (
                 self.particle_cloud[i].y
-                + delta[0] * cos(particle.theta)
-                - delta[1] * sin(particle.theta)
+                + delta[0] * sin(particle.theta)
+                + delta[1] * cos(particle.theta)
             )
             self.particle_cloud[i].theta = self.transform_helper.angle_normalize(
                 self.particle_cloud[i].theta + delta[2]
@@ -310,6 +310,9 @@ class ParticleFilter(Node):
         particle is selected in the resampling step.  You may want to make use of the given helper
         function draw_random_sample in helper_functions.py.
         """
+        # make sure the distribution is normalized
+        self.normalize_particles()
+        # TODO: fill out the rest of the implementation
         self.x_list = []
         self.y_list = []
         self.weight_list = []
@@ -317,13 +320,12 @@ class ParticleFilter(Node):
             self.x_list.append(particle.x)
             self.y_list.append(particle.y)
             self.weight_list.append(particle.w)
-        # make sure the distribution is normalized
-        self.normalize_particles()
-        # TODO: fill out the rest of the implementation
 
         # discrete resampling
         self.particle_cloud = draw_random_sample(
-            self.particle_cloud, self.weight_list, self.n_particles
+            self.particle_cloud,
+            self.weight_list,
+            self.n_particles,
         )
 
         # add noise based std_dev and normal distribution
@@ -337,7 +339,7 @@ class ParticleFilter(Node):
             loc=0, scale=y_std / 10, size=len(self.particle_cloud)
         )
         theta_noise_sample = np.random.uniform(
-            low=0, high=np.pi / 2, size=len(self.particle_cloud)
+            low=0, high=0.3, size=len(self.particle_cloud)
         )
         for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = self.particle_cloud[i].x + x_noise_sample[i]
@@ -424,14 +426,14 @@ class ParticleFilter(Node):
         self.particle_cloud = []
 
         # Get map data from occupancy_field object and calculate min/max x, y
-        bbox = self.occupancy_field.get_obstacle_bounding_box()
+        self.bbox = self.occupancy_field.get_obstacle_bounding_box()
 
-        self.get_logger().info(f"bbox: {bbox}")
+        self.get_logger().info(f"bbox: {self.bbox}")
 
         for _ in range(self.n_particles):
             particle = Particle(
-                x=np.random.uniform(low=bbox[0][0], high=bbox[0][1]),
-                y=np.random.uniform(low=bbox[1][0], high=bbox[1][1]),
+                x=np.random.uniform(low=self.bbox[0][0], high=self.bbox[0][1]),
+                y=np.random.uniform(low=self.bbox[1][0], high=self.bbox[1][1]),
                 theta=np.random.uniform(low=-np.pi, high=np.pi),
                 w=1 / self.n_particles,
             )
