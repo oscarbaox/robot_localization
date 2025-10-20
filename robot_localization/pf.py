@@ -113,9 +113,9 @@ class ParticleFilter(Node):
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
-        self.n_particles = 1000  # the number of particles to use
+        self.n_particles = 400  # the number of particles to use
         self.random_particles = (
-            200  # the number of random particles (out of n_particles)
+            80  # the number of random particles (out of n_particles)
         )
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
@@ -331,7 +331,6 @@ class ParticleFilter(Node):
         """
         # make sure the distribution is normalized
         self.normalize_particles()
-        # TODO: fill out the rest of the implementation
 
         self.x_list = []
         self.y_list = []
@@ -424,7 +423,7 @@ class ParticleFilter(Node):
 
             # Update particle weight based on likelihood
             particle.w *= 1 / likelihood
-            print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
+            # print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
 
         # Normalize after updating all particles
         self.normalize_particles()
@@ -458,14 +457,14 @@ class ParticleFilter(Node):
         self.particle_cloud = []
 
         # Get map data from occupancy_field object and calculate min/max x, y
-        bbox = self.occupancy_field.get_obstacle_bounding_box()
+        self.bbox = self.occupancy_field.get_obstacle_bounding_box()
 
-        self.get_logger().info(f"bbox: {bbox}")
+        self.get_logger().info(f"bbox: {self.bbox}")
 
         for _ in range(self.n_particles):
             particle = Particle(
-                x=np.random.uniform(low=bbox[0][0], high=bbox[0][1]),
-                y=np.random.uniform(low=bbox[1][0], high=bbox[1][1]),
+                x=np.random.uniform(low=self.bbox[0][0], high=self.bbox[0][1]),
+                y=np.random.uniform(low=self.bbox[1][0], high=self.bbox[1][1]),
                 theta=np.random.uniform(low=-np.pi, high=np.pi),
                 w=1 / self.n_particles,
             )
