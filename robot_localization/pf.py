@@ -47,7 +47,7 @@ class Particle(object):
         """Construct a new Particle
         x: the x-coordinate of the hypothesis relative to the map frame
         y: the y-coordinate of the hypothesis relative ot the map frame
-        theta: the yaw of KeyboardInterruptthe hypothesis relative to the map frame
+        theta: the yaw of the hypothesis relative to the map frame
         w: the particle weight (the class does not ensure that particle weights are normalized
         """
         self.w = w
@@ -247,10 +247,26 @@ class ParticleFilter(Node):
         # TODO: assign the latest pose into self.robot_pose as a geometry_msgs.Pose object
         # just to get started we will fix the robot's pose to always be at the origin
         theta, x, y = 0, 0, 0
+        theta_list = []
+        weight_list = []
         for particle in self.particle_cloud:
-            theta += particle.theta * particle.w
+            weight_list.append(particle.w)
+            theta_list.append(particle.theta)
             x += particle.x * particle.w
             y += particle.y * particle.w
+
+        # Get indices of particles sorted by weight (descending)
+        sorted_indices = sorted(
+            range(len(weight_list)), key=lambda i: weight_list[i], reverse=True
+        )
+
+        # Get the top 10 thetas with highest weights
+        top_10_thetas = [theta_list[i] for i in sorted_indices[:10]]
+
+        # Calculate circular average for angles (thetas are in radians)
+        cos_sum = sum(math.cos(t) for t in top_10_thetas)
+        sin_sum = sum(math.sin(t) for t in top_10_thetas)
+        theta = math.atan2(sin_sum, cos_sum)
 
         q = quaternion_from_euler(0, 0, theta)
         self.robot_pose = self.transform_helper.convert_translation_rotation_to_pose(
@@ -333,13 +349,13 @@ class ParticleFilter(Node):
             self.x_list, self.y_list, self.weight_list
         )
         x_noise_sample = np.random.normal(
-            loc=0, scale=x_std / 10, size=len(self.particle_cloud)
+            loc=0, scale=x_std / 7, size=len(self.particle_cloud)
         )
         y_noise_sample = np.random.normal(
-            loc=0, scale=y_std / 10, size=len(self.particle_cloud)
+            loc=0, scale=y_std / 7, size=len(self.particle_cloud)
         )
         theta_noise_sample = np.random.uniform(
-            low=0, high=0.3, size=len(self.particle_cloud)
+            low=0, high=0.4, size=len(self.particle_cloud)
         )
         for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = self.particle_cloud[i].x + x_noise_sample[i]
@@ -385,9 +401,9 @@ class ParticleFilter(Node):
 
                 # Update likelihood based on how close the scan point is to an obstacle
                 if np.isnan(dist_to_obstacle):
-                    likelihood += 20
+                    likelihood += 500
                 else:
-                    likelihood += dist_to_obstacle
+                    likelihood += dist_to_obstacle**2
 
             # Update particle weight based on likelihood
             particle.w *= 1 / likelihood
@@ -425,14 +441,14 @@ class ParticleFilter(Node):
         self.particle_cloud = []
 
         # Get map data from occupancy_field object and calculate min/max x, y
-        self.bbox = self.occupancy_field.get_obstacle_bounding_box()
+        bbox = self.occupancy_field.get_obstacle_bounding_box()
 
-        self.get_logger().info(f"bbox: {self.bbox}")
+        self.get_logger().info(f"bbox: {bbox}")
 
         for _ in range(self.n_particles):
             particle = Particle(
-                x=np.random.uniform(low=self.bbox[0][0], high=self.bbox[0][1]),
-                y=np.random.uniform(low=self.bbox[1][0], high=self.bbox[1][1]),
+                x=np.random.uniform(low=bbox[0][0], high=bbox[0][1]),
+                y=np.random.uniform(low=bbox[1][0], high=bbox[1][1]),
                 theta=np.random.uniform(low=-np.pi, high=np.pi),
                 w=1 / self.n_particles,
             )
