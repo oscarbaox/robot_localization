@@ -113,7 +113,10 @@ class ParticleFilter(Node):
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
-        self.n_particles = 300  # the number of particles to use
+        self.n_particles = 1000  # the number of particles to use
+        self.random_particles = (
+            200  # the number of random particles (out of n_particles)
+        )
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
         self.a_thresh = (
@@ -313,30 +316,47 @@ class ParticleFilter(Node):
         # make sure the distribution is normalized
         self.normalize_particles()
         # TODO: fill out the rest of the implementation
+
         self.x_list = []
         self.y_list = []
         self.weight_list = []
         for i, particle in enumerate(self.particle_cloud):
-            self.x_list.append(particle.x)
-            self.y_list.append(particle.y)
             self.weight_list.append(particle.w)
 
         # discrete resampling
         self.particle_cloud = draw_random_sample(
             self.particle_cloud,
             self.weight_list,
-            self.n_particles,
+            len(self.particle_cloud),
         )
+
+        self.particle_cloud = self.particle_cloud[
+            0 : len(self.particle_cloud) - self.random_particles
+        ]
+
+        for _ in range(self.random_particles):
+            particle = Particle(
+                x=np.random.uniform(low=self.bbox[0][0], high=self.bbox[0][1]),
+                y=np.random.uniform(low=self.bbox[1][0], high=self.bbox[1][1]),
+                theta=np.random.uniform(low=-np.pi, high=np.pi),
+                w=1 / self.n_particles,
+            )
+
+            self.particle_cloud.append(particle)
+
+        for i, particle in enumerate(self.particle_cloud):
+            self.x_list.append(particle.x)
+            self.y_list.append(particle.y)
 
         # add noise based std_dev and normal distribution
         x_std, y_std = Particle.weighted_std_sample(
             self.x_list, self.y_list, self.weight_list
         )
         x_noise_sample = np.random.normal(
-            loc=0, scale=x_std / 10, size=len(self.particle_cloud)
+            loc=0, scale=x_std / 5, size=len(self.particle_cloud)
         )
         y_noise_sample = np.random.normal(
-            loc=0, scale=y_std / 10, size=len(self.particle_cloud)
+            loc=0, scale=y_std / 5, size=len(self.particle_cloud)
         )
         theta_noise_sample = np.random.uniform(
             low=0, high=0.3, size=len(self.particle_cloud)
@@ -347,9 +367,6 @@ class ParticleFilter(Node):
             self.particle_cloud[i].theta = self.transform_helper.angle_normalize(
                 self.particle_cloud[i].theta + theta_noise_sample[i]
             )
-        self.get_logger().info(
-            f"samples: {[(sample.x, sample.y) for sample in self.particle_cloud]}"
-        )
 
     def update_particles_with_laser(self, r, theta):
         """Updates the particle weights in response to the scan data
