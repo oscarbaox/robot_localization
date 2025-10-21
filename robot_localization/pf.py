@@ -2,27 +2,28 @@
 
 """This is the starter code for the robot localization project"""
 
-import rclpy
+import math
+from math import sin, cos
+import time
 from threading import Thread
+import rclpy
+from rclpy.duration import Duration
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from rclpy.node import Node
-from std_msgs.msg import Header
 from sensor_msgs.msg import LaserScan
 from nav2_msgs.msg import ParticleCloud
 from nav2_msgs.msg import Particle as Nav2Particle
 from geometry_msgs.msg import PoseWithCovarianceStamped, Pose, Point, Quaternion
-from rclpy.duration import Duration
-import math
-from math import sin, cos
-import time
 import numpy as np
 from occupancy_field import OccupancyField
 from helper_functions import TFHelper, draw_random_sample
-from rclpy.qos import qos_profile_sensor_data
 from angle_helpers import quaternion_from_euler
 
 
-class bcolors:
+class BColors:
+    """Define colors to print to terminal"""
+
     HEADER = "\033[95m"
     OKBLUE = "\033[94m"
     OKCYAN = "\033[96m"
@@ -63,7 +64,6 @@ class Particle(object):
             orientation=Quaternion(x=q[0], y=q[1], z=q[2], w=q[3]),
         )
 
-    # TODO: define additional helper functions if needed
     @staticmethod
     def wrap_angle_to_pi(angle):
         """Wraps an angle (in radians) to the interval [-pi, pi]."""
@@ -87,19 +87,23 @@ class Particle(object):
 class ParticleFilter(Node):
     """The class that represents a Particle Filter ROS Node
     Attributes list:
-        base_frame: the name of the robot base coordinate frame (should be "base_footprint" for most robots)
+        base_frame: the name of the robot base coordinate frame
+            (should be "base_footprint" for most robots)
         map_frame: the name of the map coordinate frame (should be "map" in most cases)
         odom_frame: the name of the odometry coordinate frame (should be "odom" in most cases)
         scan_topic: the name of the scan topic to listen to (should be "scan" in most cases)
         n_particles: the number of particles in the filter
         d_thresh: the amount of linear movement before triggering a filter update
         a_thresh: the amount of angular movement before triggering a filter update
-        pose_listener: a subscriber that listens for new approximate pose estimates (i.e. generated through the rviz GUI)
+        pose_listener: a subscriber that listens for new approximate pose estimates
+            (i.e. generated through the rviz GUI)
         particle_pub: a publisher for the particle cloud
         last_scan_timestamp: this is used to keep track of the clock when using bags
         scan_to_process: the scan that our run_loop should process next
-        occupancy_field: this helper class allows you to query the map for distance to closest obstacle
-        transform_helper: this helps with various transform operations (abstracting away the tf2 module)
+        occupancy_field: this helper class allows you to query the map for distance
+            to closest obstacle
+        transform_helper: this helps with various transform operations (abstracting
+            away the tf2 module)
         particle_cloud: a list of particles representing a probability distribution over robot poses
         current_odom_xy_theta: the pose of the robot in the odometry frame when the last filter update was performed.
                                The pose is expressed as a list [x,y,theta] (where theta is the yaw)
@@ -114,7 +118,9 @@ class ParticleFilter(Node):
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
         self.n_particles = 5000  # the number of particles to use
-        self.random_particles = 0  # the number of random particles (out of n_particles)
+        self.random_particles = (
+            500  # the number of random particles (out of n_particles)
+        )
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
         self.a_thresh = (
@@ -125,7 +131,8 @@ class ParticleFilter(Node):
         self.y_list = []
         self.weight_list = []
 
-        # pose_listener responds to selection of a new approximate robot location (for instance using rviz)
+        # pose_listener responds to selection of a new approximate robot location
+        # (for instance using rviz)
         self.create_subscription(
             PoseWithCovarianceStamped, "initialpose", self.update_initial_pose, 10
         )
@@ -156,7 +163,8 @@ class ParticleFilter(Node):
         thread.start()
         self.transform_update_timer = self.create_timer(0.05, self.pub_latest_transform)
 
-        self.robot_pose = Pose()
+        self.robot_pose = None
+        self.odom_pose = None
 
     def pub_latest_transform(self):
         """This function takes care of sending out the map to odom transform"""
@@ -201,7 +209,7 @@ class ParticleFilter(Node):
         (r, theta) = self.transform_helper.convert_scan_to_polar_in_robot_frame(
             msg, self.base_frame
         )
-        print("r[0]={0}, theta[0]={1}".format(r[0], theta[0]))
+        print(f"r[0]={r[0]}, theta[0]={theta[0]}")
         # clear the current scan so that we can process the next one
         self.scan_to_process = None
 
@@ -244,7 +252,8 @@ class ParticleFilter(Node):
         # first make sure that the particle weights are normalized
         self.normalize_particles()
 
-        # just to get started we will fix the robot's pose to always be at the origin
+        # Doing a weighted sum of x and y, while averaging the heading of
+        # the top 100 particles
         theta, x, y = 0, 0, 0
         theta_list = []
         weight_list = []
@@ -254,19 +263,17 @@ class ParticleFilter(Node):
             x += particle.x * particle.w
             y += particle.y * particle.w
 
-        # Get indices of particles sorted by weight (descending)
-        sorted_indices = sorted(
-            range(len(weight_list)), key=lambda i: weight_list[i], reverse=True
-        )
+        # Sort the angles by descending weight
+        sorted_theta = [
+            theta for _, theta in sorted(zip(weight_list, theta_list), reverse=True)
+        ]
 
-        # Get the top 10 thetas with highest weights
-        top_10_thetas = [theta_list[i] for i in sorted_indices[:100]]
-
-        # Calculate circular average for angles (thetas are in radians)
-        cos_sum = sum(math.cos(t) for t in top_10_thetas)
-        sin_sum = sum(math.sin(t) for t in top_10_thetas)
+        # Calculate circular average for angles for the top 100 thetas
+        cos_sum = sum(cos(t) for t in sorted_theta[:100])
+        sin_sum = sum(sin(t) for t in sorted_theta[:100])
         theta = math.atan2(sin_sum, cos_sum)
 
+        # Convert x,y,yaw to Pose
         q = quaternion_from_euler(0, 0, theta)
         self.robot_pose = self.transform_helper.convert_translation_rotation_to_pose(
             [x, y, 0.0], q
@@ -303,21 +310,23 @@ class ParticleFilter(Node):
             self.current_odom_xy_theta = new_odom_xy_theta
             return
 
-        # TODO (done): modify particles using delta
-        for i, particle in enumerate(self.particle_cloud):
-            self.particle_cloud[i].x = (
-                self.particle_cloud[i].x
-                + delta[0] * cos(particle.theta)
-                - delta[1] * sin(particle.theta)
+        # Apply delta directly
+        for _, particle in enumerate(self.particle_cloud):
+            particle.x += delta[0]
+            particle.y += delta[1]
+            particle.theta = self.transform_helper.angle_normalize(
+                particle.theta + delta[2]
             )
-            self.particle_cloud[i].y = (
-                self.particle_cloud[i].y
-                + delta[0] * sin(particle.theta)
-                + delta[1] * cos(particle.theta)
-            )
-            self.particle_cloud[i].theta = self.transform_helper.angle_normalize(
-                self.particle_cloud[i].theta + delta[2]
-            )
+
+        # Add some motion noise
+        for _, particle in enumerate(self.particle_cloud):
+            movement_magnitude = math.sqrt(delta[0] ** 2 + delta[1] ** 2)
+            noise_scale = max(0.05, movement_magnitude * 0.1)
+
+            particle.x += np.random.normal(0, noise_scale)
+            particle.y += np.random.normal(0, noise_scale)
+            particle.theta += np.random.normal(0, abs(delta[2]) * 0.1 + 0.05)
+            particle.theta = self.transform_helper.angle_normalize(particle.theta)
 
     def resample_particles(self):
         """Resample the particles according to the new particle weights.
@@ -331,7 +340,7 @@ class ParticleFilter(Node):
         self.x_list = []
         self.y_list = []
         self.weight_list = []
-        for i, particle in enumerate(self.particle_cloud):
+        for _, particle in enumerate(self.particle_cloud):
             self.weight_list.append(particle.w)
 
         # discrete resampling
@@ -373,10 +382,10 @@ class ParticleFilter(Node):
             low=-0.1, high=0.1, size=len(self.particle_cloud)
         )
         for i, particle in enumerate(self.particle_cloud):
-            self.particle_cloud[i].x = self.particle_cloud[i].x + x_noise_sample[i]
-            self.particle_cloud[i].y = self.particle_cloud[i].y + y_noise_sample[i]
-            self.particle_cloud[i].theta = self.transform_helper.angle_normalize(
-                self.particle_cloud[i].theta + theta_noise_sample[i]
+            particle.x = particle.x + x_noise_sample[i]
+            particle.y = particle.y + y_noise_sample[i]
+            particle.theta = self.transform_helper.angle_normalize(
+                particle.theta + theta_noise_sample[i]
             )
 
     def update_particles_with_laser(self, r, theta):
@@ -384,28 +393,28 @@ class ParticleFilter(Node):
         r: the distance readings to obstacles
         theta: the angle relative to the robot frame for each corresponding reading
         """
-        sigma = 0.07  # Sensor noise parameter - tune this!
+        sigma = 0.09  # Sensor noise parameter
 
         for particle in self.particle_cloud:
-            log_likelihood = 0.0  # Use log to avoid numerical issues
+            log_likelihood = 0.0
             num_valid_readings = 0
 
             for i in range(len(r)):
                 if np.isnan(r[i]) or np.isinf(r[i]):
                     continue
-                if i % 10 != 0:  # Subsample for performance
+                if i % 10 != 0:  # Only sample one in 10 for performance
                     continue
 
                 # Transform laser scan point to map frame
-                scan_x_map = particle.x + r[i] * np.cos(particle.theta + theta[i])
-                scan_y_map = particle.y + r[i] * np.sin(particle.theta + theta[i])
+                scan_x_map = particle.x + r[i] * cos(particle.theta + theta[i])
+                scan_y_map = particle.y + r[i] * sin(particle.theta + theta[i])
 
                 dist_to_obstacle = self.occupancy_field.get_closest_obstacle_distance(
                     scan_x_map, scan_y_map
                 )
 
                 if np.isnan(dist_to_obstacle):
-                    # Heavy penalty for out-of-bounds
+                    # Heavy penalty for out of bound particles
                     log_likelihood += -20.0
                 else:
                     # Gaussian sensor model
@@ -417,20 +426,19 @@ class ParticleFilter(Node):
             if num_valid_readings > 0:
                 particle.w = np.exp(log_likelihood / num_valid_readings)
             else:
-                particle.w = (
-                    1e-10  # Very small weight for particles with no valid readings
-                )
+                particle.w = 1e-10
 
         self.normalize_particles()
-        weights = []
-        coords = []
-        for particle in self.particle_cloud:
-            weights.append(particle.w)
-            coords.append((particle.x, particle.y))
-        weights.sort(reverse=True)
-        print(
-            f"{bcolors.FAIL}Particle weights:{', '.join(map(str, weights[:9]))}{bcolors.ENDC}"
-        )
+        # Debug print statements
+        # weights = []
+        # coords = []
+        # for particle in self.particle_cloud:
+        #     weights.append(particle.w)
+        #     coords.append((particle.x, particle.y))
+        # weights.sort(reverse=True)
+        # print(
+        #     f"{BColors.FAIL}Particle weights:{', '.join(map(str, weights[:9]))}{BColors.ENDC}"
+        # )
 
     def update_initial_pose(self, msg):
         """Callback function to handle re-initializing the particle filter based on a pose estimate.
@@ -485,7 +493,7 @@ class ParticleFilter(Node):
         self.get_logger().info(f"Weight_sum: {weight_sum}")
 
         for i, particle in enumerate(self.particle_cloud):
-            self.particle_cloud[i].w = self.particle_cloud[i].w / weight_sum
+            particle.w = particle.w / weight_sum
 
     def publish_particles(self, timestamp):
         msg = ParticleCloud()
