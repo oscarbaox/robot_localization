@@ -113,17 +113,14 @@ class ParticleFilter(Node):
         self.odom_frame = "odom"  # the name of the odometry coordinate frame
         self.scan_topic = "scan"  # the topic where we will get laser scans from
 
-        self.n_particles = 400  # the number of particles to use
-        self.random_particles = (
-            80  # the number of random particles (out of n_particles)
-        )
+        self.n_particles = 5000  # the number of particles to use
+        self.random_particles = 0  # the number of random particles (out of n_particles)
 
         self.d_thresh = 0.2  # the amount of linear movement before performing an update
         self.a_thresh = (
             math.pi / 6
         )  # the amount of angular movement before performing an update
 
-        # TODO: define additional constants if needed
         self.x_list = []
         self.y_list = []
         self.weight_list = []
@@ -247,7 +244,6 @@ class ParticleFilter(Node):
         # first make sure that the particle weights are normalized
         self.normalize_particles()
 
-        # TODO: assign the latest pose into self.robot_pose as a geometry_msgs.Pose object
         # just to get started we will fix the robot's pose to always be at the origin
         theta, x, y = 0, 0, 0
         theta_list = []
@@ -264,7 +260,7 @@ class ParticleFilter(Node):
         )
 
         # Get the top 10 thetas with highest weights
-        top_10_thetas = [theta_list[i] for i in sorted_indices[:10]]
+        top_10_thetas = [theta_list[i] for i in sorted_indices[:100]]
 
         # Calculate circular average for angles (thetas are in radians)
         cos_sum = sum(math.cos(t) for t in top_10_thetas)
@@ -368,13 +364,13 @@ class ParticleFilter(Node):
             self.x_list, self.y_list, self.weight_list
         )
         x_noise_sample = np.random.normal(
-            loc=0, scale=x_std / 7, size=len(self.particle_cloud)
+            loc=0, scale=x_std / 15, size=len(self.particle_cloud)
         )
         y_noise_sample = np.random.normal(
-            loc=0, scale=y_std / 7, size=len(self.particle_cloud)
+            loc=0, scale=y_std / 15, size=len(self.particle_cloud)
         )
         theta_noise_sample = np.random.uniform(
-            low=0, high=0.4, size=len(self.particle_cloud)
+            low=-0.1, high=0.1, size=len(self.particle_cloud)
         )
         for i, particle in enumerate(self.particle_cloud):
             self.particle_cloud[i].x = self.particle_cloud[i].x + x_noise_sample[i]
@@ -388,44 +384,43 @@ class ParticleFilter(Node):
         r: the distance readings to obstacles
         theta: the angle relative to the robot frame for each corresponding reading
         """
-        # print(f"{bcolors.FAIL}Lenght of r:{len(r)}{bcolors.ENDC}")
-        # print(
-        #     f"{bcolors.FAIL}Theta: {theta[0]}, {theta[1]}, {theta[719]}{bcolors.ENDC}"
-        # )
-        print("Before: ", end="")
-        for i in range(10):
-            print(f"{bcolors.FAIL}{self.particle_cloud[i].w}, {bcolors.ENDC}", end="")
-        print()
+        sigma = 0.07  # Sensor noise parameter - tune this!
 
         for particle in self.particle_cloud:
-
-            likelihood = 0.0
+            log_likelihood = 0.0  # Use log to avoid numerical issues
+            num_valid_readings = 0
 
             for i in range(len(r)):
-                # Skip invalid readings
                 if np.isnan(r[i]) or np.isinf(r[i]):
                     continue
+                if i % 10 != 0:  # Subsample for performance
+                    continue
 
-                # Transform laser scan point to map frame using particle's pose
+                # Transform laser scan point to map frame
                 scan_x_map = particle.x + r[i] * np.cos(particle.theta + theta[i])
                 scan_y_map = particle.y + r[i] * np.sin(particle.theta + theta[i])
 
-                # Get distance to closest obstacle at this point
                 dist_to_obstacle = self.occupancy_field.get_closest_obstacle_distance(
                     scan_x_map, scan_y_map
                 )
 
-                # Update likelihood based on how close the scan point is to an obstacle
                 if np.isnan(dist_to_obstacle):
-                    likelihood += 500
+                    # Heavy penalty for out-of-bounds
+                    log_likelihood += -20.0
                 else:
-                    likelihood += dist_to_obstacle**2
+                    # Gaussian sensor model
+                    log_likelihood += -(dist_to_obstacle**2) / (2 * sigma**2)
 
-            # Update particle weight based on likelihood
-            particle.w *= 1 / likelihood
-            # print(f"{bcolors.FAIL}Likelihood: {likelihood}{bcolors.ENDC}")
+                num_valid_readings += 1
 
-        # Normalize after updating all particles
+            # Convert back from log space and normalize by number of readings
+            if num_valid_readings > 0:
+                particle.w = np.exp(log_likelihood / num_valid_readings)
+            else:
+                particle.w = (
+                    1e-10  # Very small weight for particles with no valid readings
+                )
+
         self.normalize_particles()
         weights = []
         coords = []
