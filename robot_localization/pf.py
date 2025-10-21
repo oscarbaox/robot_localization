@@ -415,14 +415,13 @@ class ParticleFilter(Node):
 
                 if np.isnan(dist_to_obstacle):
                     # Heavy penalty for out of bound particles
-                    log_likelihood += -20.0
+                    log_likelihood -= 20.0
                 else:
                     # Gaussian sensor model
-                    log_likelihood += -(dist_to_obstacle**2) / (2 * sigma**2)
+                    log_likelihood -= (dist_to_obstacle**2) / (2 * sigma**2)
 
                 num_valid_readings += 1
 
-            # Convert back from log space and normalize by number of readings
             if num_valid_readings > 0:
                 particle.w = np.exp(log_likelihood / num_valid_readings)
             else:
