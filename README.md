@@ -10,12 +10,12 @@ The goal of this project is to determine the robot’s pose in the world frame (
 A skeleton code is provided by the teaching team with supporting helper functions. From there, the steps we implemented are particle initialization, particle update with regards to odometry, particle weight assignment, particle resampling, and pose estimation. We test the performance of the filter on RVIZ where it shows a reasonable amount of accuracy and consistency. Within the implementation, we made a few design decisions outside of the given basic filter. More details will be provided in later sections.
 
 <p align="center">
-<img src="assets/Following.gif" style="width:45%; height:auto; margin-right: 5px;">
-<img src="assets/Localizing.gif" style="width:45.5%; height:auto; margin-left: 5px;"> <br>
+<img src="assets/Following.gif" style="width:60%; height:auto; margin-right: 5px;">
+<img src="assets/Localizing.gif" style="width:61%; height:auto; margin-left: 5px;"> <br>
 Fig.1 Recordings of local algorithm working
 </p>
 
-The gif on the left shows our particle cloud closely following the robot after succesfully converging, and the gif on the right shows how the localization algorithm can recover from wrong convergences because we reserved a portion of particles that are always uniformly distributed.
+The gif on the top shows our particle cloud closely following the robot after succesfully converging, and the gif on the bottom shows how the localization algorithm can recover from wrong convergences because we reserved a portion of particles that are always uniformly distributed.
 
 The full screen recordings of two runthroughs can be found [here](https://olincollege-my.sharepoint.com/:f:/g/personal/xbao_olin_edu/EnM85PzJkjZNhfwgBXLRSNsB_8hwo-6voIztSSql0D6m4w?e=Ueln1t).
 
@@ -26,7 +26,7 @@ The particle filter has four main steps: initialization, update with odometry, w
 The two topics subscribed to are `/scan` and `/odom`. The scan topic provides the LiDAR data used in the weight assignment step. The odom topic provides information on the robot’s movement which is used in the update with odometry step.
 
 <p align="center">
-<img src="assets/methodology.jpg" style="width:50%; height:auto;"> <br>
+<img src="assets/methodology.jpg" style="width:70%; height:auto;"> <br>
 Fig.2 System diagram
 </p>
 
@@ -36,14 +36,10 @@ The first step of the filter is initializing the particles within the map bounds
 
 ```python
 particle = Particle(
-
-x=np.random.uniform(low=self.bbox[0][0], high=self.bbox[0][1]),
-
-y=np.random.uniform(low=self.bbox[1][0], high=self.bbox[1][1]),
-
-theta=np.random.uniform(low=-np.pi, high=np.pi),
-
-w=1 / self.n_particles)
+  x=np.random.uniform(low=self.bbox[0][0], high=self.bbox[0][1]),
+  y=np.random.uniform(low=self.bbox[1][0], high=self.bbox[1][1]),
+  theta=np.random.uniform(low=-np.pi, high=np.pi),
+  w=1 / self.n_particles)
 ```
 
 ### Particle Weight Normalization
@@ -78,7 +74,7 @@ x &= r \times \cos(\theta) + \text{particle.x} \\
 y &= r \times \sin(\theta) + \text{particle.y}
 \end{align*}
 ```  
-  
+<br>
 Doing so, we get a list of `map` frame coordinates that represent where the scan is in the `map` frame, if the robot were at the particular particle’s position. We then utilize the provided `get_closest_obstacle_distance()` function, which takes in coordinates from the `map` frame and returns a scalar number representing the distance from that point to the closest obstacle. 
 
 In an ideal world, if the particle’s position is 100% correct, the distance returned for every scan, or `error`, should be 0. Therefore, after we pass in each particle scan’s coordinate and get an `error`, we can calculate the penalty to its weight given how far off it is. We utilized a Gaussian function to determine the penalty, specifically
@@ -86,7 +82,7 @@ In an ideal world, if the particle’s position is 100% correct, the distance re
 ```math
 p = -\frac{error^2}{2\sigma ^2},
 ```
-
+<br>
 where $p$ is the penalty, and $\sigma$ is the sensitivity constant, with a lower $\sigma$ being more forigiving, and vice versa. 
 
 Finally, to calculate the weight of each particle, we sum up the penalty and apply it to an exponential function, 
@@ -121,8 +117,8 @@ Using only discrete resampling, the filter is stuck with the same points that we
 
 ```math
 \begin{align*}
-s_x &= \sqrt{\frac{\sum_{i=0}^{n_p} x_i - \bar{x}}{n_p - 1}} \\
-s_y &= \sqrt{\frac{\sum_{i=0}^{n_p} y_i - \bar{y}}{n_p - 1}}
+s_x = \sqrt{\frac{\sum_{i=0}^{n_p} x_i - \bar{x}}{n_p - 1}} \\
+s_y = \sqrt{\frac{\sum_{i=0}^{n_p} y_i - \bar{y}}{n_p - 1}}
 \end{align*}
 ```
 
@@ -130,8 +126,8 @@ For normal distribution generation:
 
 ```math
 \begin{align*}
-std &= \frac{s_x}{15} \\
-std &= \frac{s_y}{15}
+std = \frac{s_x}{15} \\
+std = \frac{s_y}{15}
 \end{align*}
 ```
 
@@ -142,9 +138,10 @@ After we have an updated particle cloud, we calculate the robot's pose by doing 
 
 ```math
 \begin{align*}
-Pose_x &= \sum_{i=0}^{n}{w_i x_i} & Pose_y &= \sum_{i=0}^{n}{w_i y_i}
-\end{align*} \\
-
+Pose_x = \sum_{i=0}^{n}{w_i x_i} \qquad  Pose_y = \sum_{i=0}^{n}{w_i y_i}
+\end{align*}
+```
+```math
 Pose_\theta = \text{atan2}(\sum_{i=0}^{100}{\sin(\theta_i)}, \sum_{i=0}^{100}{\cos(\theta_i)}),
 ```
 
