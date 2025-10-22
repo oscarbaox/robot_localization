@@ -26,7 +26,7 @@ The particle filter has four main steps: initialization, update with odometry, w
 The two topics subscribed to are `/scan` and `/odom`. The scan topic provides the LiDAR data used in the weight assignment step. The odom topic provides information on the robot’s movement which is used in the update with odometry step.
 
 <p align="center">
-<img src="assets/methodology.jpg" style="width:70%; height:auto;"> <br>
+<img src="assets/methodology.jpg" style="width:80%; height:auto;"> <br>
 Fig.2 System diagram
 </p>
 
@@ -108,9 +108,8 @@ self.particle_cloud = draw_random_sample(self.particle_cloud, self.weight_list, 
 If multiple locations on the map have the same features, there is a high chance of convergence at a local minimum. We counteract this by always generating random particles in a uniform distribution around the map. Our filter works best when the ratio is 20% of particles generated randomly. In a situation where the filter has converged at a local minimum, the randomly generated particles could be at a more likely position, giving it a higher weight. In the next iteration, more particles will now be generated at that location, breaking us out of the local minimum.
 
 <p align="center">
-<img src="assets/uniform_spread.png" style="width:45%; height:auto;"> <br>
+<img src="assets/uniform_spread.png" style="width:60%; height:auto;"> <br>
 Fig.3 Particles in green showing that 20% of them are uniformly distributed at all time
-
 </p>
 
 Using only discrete resampling, the filter is stuck with the same points that were generated at the initialization step. It is very likely those particles are not the most optimal pose locations. Therefore, by adding noise, we introduce new particles which could have higher confidences than existing particles. The method to add noise is by generating points based on a normal distribution around the mean zero. The standard deviation is calculated based on the existing particle clouds. The standard deviation of the particle cloud generally introduces too much noise. Therefore, we divided the standard deviation by a constant to ensure more consistency in our filter. This approach allows us to generate more noise when particle clouds are not confident, and slowly decrease the amount of noise as the particle filter becomes more confident.
