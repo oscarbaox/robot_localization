@@ -9,11 +9,26 @@ The goal of this project is to determine the robot’s pose in the world frame (
 
 A skeleton code is provided by the teaching team with supporting helper functions. From there, the steps we implemented are particle initialization, particle update with regards to odometry, particle weight assignment, particle resampling, and pose estimation. We test the performance of the filter on RVIZ where it shows a reasonable amount of accuracy and consistency. Within the implementation, we made a few design decisions outside of the given basic filter. More details will be provided in later sections.
 
+<p align="center">
+<img src="assets/Following.gif" style="width:45%; height:auto; margin-right: 5px;">
+<img src="assets/Localizing.gif" style="width:45.5%; height:auto; margin-left: 5px;"> <br>
+Fig.1 Recordings of local algorithm working
+</p>
+
+The gif on the left shows our particle cloud closely following the robot after succesfully converging, and the gif on the right shows how the localization algorithm can recover from wrong convergences because we reserved a portion of particles that are always uniformly distributed.
+
+The full screen recordings of two runthroughs can be found [here](https://olincollege-my.sharepoint.com/:f:/g/personal/xbao_olin_edu/EnM85PzJkjZNhfwgBXLRSNsB_8hwo-6voIztSSql0D6m4w?e=Ueln1t).
+
 ## Methodology
 
 The particle filter has four main steps: initialization, update with odometry, weight assignment, and resampling. Throughout the steps, the particles are normalized to ensure consistency. At the end of a cycle, we will use the particles and their weights to determine the pose estimate of the robot in the world frame. 
 
 The two topics subscribed to are `/scan` and `/odom`. The scan topic provides the LiDAR data used in the weight assignment step. The odom topic provides information on the robot’s movement which is used in the update with odometry step.
+
+<p align="center">
+<img src="assets/methodology.jpg" style="width:50%; height:auto;"> <br>
+Fig.2 System diagram
+</p>
 
 ### Particle Initialization
 
@@ -62,8 +77,8 @@ We assigned weight based on the LiDAR readings from the Turtle Bot. For each LiD
 x &= r \times \cos(\theta) + \text{particle.x} \\
 y &= r \times \sin(\theta) + \text{particle.y}
 \end{align*}
-```
-
+```  
+  
 Doing so, we get a list of `map` frame coordinates that represent where the scan is in the `map` frame, if the robot were at the particular particle’s position. We then utilize the provided `get_closest_obstacle_distance()` function, which takes in coordinates from the `map` frame and returns a scalar number representing the distance from that point to the closest obstacle. 
 
 In an ideal world, if the particle’s position is 100% correct, the distance returned for every scan, or `error`, should be 0. Therefore, after we pass in each particle scan’s coordinate and get an `error`, we can calculate the penalty to its weight given how far off it is. We utilized a Gaussian function to determine the penalty, specifically
@@ -95,6 +110,12 @@ self.particle_cloud = draw_random_sample(self.particle_cloud, self.weight_list, 
 ```
 
 If multiple locations on the map have the same features, there is a high chance of convergence at a local minimum. We counteract this by always generating random particles in a uniform distribution around the map. Our filter works best when the ratio is 20% of particles generated randomly. In a situation where the filter has converged at a local minimum, the randomly generated particles could be at a more likely position, giving it a higher weight. In the next iteration, more particles will now be generated at that location, breaking us out of the local minimum.
+
+<p align="center">
+<img src="assets/uniform_spread.png" style="width:45%; height:auto;"> <br>
+Fig.3 Particles in green showing that 20% of them are uniformly distributed at all time
+
+</p>
 
 Using only discrete resampling, the filter is stuck with the same points that were generated at the initialization step. It is very likely those particles are not the most optimal pose locations. Therefore, by adding noise, we introduce new particles which could have higher confidences than existing particles. The method to add noise is by generating points based on a normal distribution around the mean zero. The standard deviation is calculated based on the existing particle clouds. The standard deviation of the particle cloud generally introduces too much noise. Therefore, we divided the standard deviation by a constant to ensure more consistency in our filter. This approach allows us to generate more noise when particle clouds are not confident, and slowly decrease the amount of noise as the particle filter becomes more confident.
 
